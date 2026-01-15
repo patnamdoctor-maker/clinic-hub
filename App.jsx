@@ -5,7 +5,7 @@ import {
   RefreshCw, Eye, Info, BarChart3, Table as TableIcon, 
   UserPlus, Clock, CheckCircle2, Calendar, Filter, ClipboardCheck,
   IndianRupee, Pill, Save, FileText, Check, X, Search, UserCheck, 
-  Droplets, CreditCard, Wallet, Users, Trash2, Plus
+  Droplets, CreditCard, Wallet, Users, Trash2, Plus, Copy, Link as LinkIcon
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -17,7 +17,6 @@ import {
 } from 'firebase/auth';
 
 // --- Firebase Initialization ---
-// Fixed: Renamed defaultConfig to firebaseConfig and added a check for the environment variable
 const firebaseConfig = typeof __firebase_config !== 'undefined' 
   ? JSON.parse(__firebase_config) 
   : {
@@ -35,6 +34,42 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'clinic-app-v2';
 
+// --- Shared UI Component: Custom Alert/Modal ---
+const GlobalModal = ({ isOpen, title, message, type = 'info', onClose, actionLabel, onAction }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="flex flex-col items-center text-center">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${
+            type === 'success' ? 'bg-green-50 text-green-600' : 
+            type === 'error' ? 'bg-red-50 text-red-600' : 
+            'bg-blue-50 text-blue-600'
+          }`}>
+            {type === 'success' ? <CheckCircle2 size={24} /> : 
+             type === 'error' ? <X size={24} /> : 
+             <Info size={24} />}
+          </div>
+          <h3 className="text-lg font-bold text-slate-900 mb-2 uppercase tracking-tight">{title}</h3>
+          <div className="text-sm text-slate-500 mb-6 leading-relaxed whitespace-pre-wrap">{message}</div>
+          <div className="flex gap-3 w-full">
+            {onAction && actionLabel && (
+              <button onClick={onAction} className="flex-1 py-3 bg-slate-900 text-white rounded-xl text-[11px] font-bold uppercase tracking-wider hover:bg-black transition-all">
+                {actionLabel}
+              </button>
+            )}
+            <button onClick={onClose} className={`flex-1 py-3 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all ${
+              onAction ? 'bg-slate-100 text-slate-600 hover:bg-slate-200' : 'bg-slate-900 text-white hover:bg-black'
+            }`}>
+              {onAction ? 'Dismiss' : 'Close'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Shared Component: Past Records List ---
 const PastRecordsTimeline = ({ records, onSelectPrescription, onSelectReports }) => (
   <div className="space-y-2">
@@ -43,7 +78,7 @@ const PastRecordsTimeline = ({ records, onSelectPrescription, onSelectReports })
     ) : (
       records.sort((a,b) => b.date.localeCompare(a.date)).map((rec) => (
         <div key={rec.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 hover:border-slate-300 transition-all">
-          <div className="flex flex-col">
+          <div className="flex flex-col text-left">
             <span className="text-[10px] font-bold text-slate-500 uppercase">{rec.date}</span>
             <span className="text-xs font-semibold text-slate-800">{rec.provisionalDiagnosis || "General Checkup"}</span>
           </div>
@@ -106,7 +141,7 @@ const PrescriptionPreview = ({ data, doctors }) => {
 // --- Component: Administrative Dashboard ---
 const AdminModule = ({ 
   formData, handleInputChange, onInitiate, onUpdate, status, 
-  consultationsList, updateBillingStatus, doctors,
+  consultationsList, updateBillingStatus, doctors, showAlert,
   patientHistory, setViewingOldRecord, setViewingOldReports, activeTab, setActiveTab, setFormData, setStatus, setConsultationId, consultationId
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -158,7 +193,7 @@ const AdminModule = ({
       setConsultationId(null);
       setAdminMode('consultation');
     } else {
-      alert("No match found. Proceed with Registration.");
+      showAlert("Not Found", "No patient record matched that ID or phone number. Please proceed with registration.", "info");
       setAdminMode('registration');
     }
   };
@@ -169,6 +204,7 @@ const AdminModule = ({
       const docRef = collection(db, 'artifacts', appId, 'public', 'data', 'doctors');
       await addDoc(docRef, { ...newDoctor, id: `DOC-${Date.now()}` });
       setNewDoctor({ name: '', registration: '', qualification: '', email: '' });
+      showAlert("Success", "Doctor profile has been added to the registry.", "success");
     } catch (err) {
       console.error(err);
     }
@@ -444,7 +480,7 @@ const AdminModule = ({
                </thead>
                <tbody className="divide-y divide-slate-100">
                  {doctors.map(d => (
-                   <tr key={d.id} className="hover:bg-slate-50">
+                   <tr key={d.dbId} className="hover:bg-slate-50 transition-colors">
                      <td className="px-6 py-4 font-bold text-slate-800">{d.name}</td>
                      <td className="px-6 py-4 text-slate-500">{d.registration}</td>
                      <td className="px-6 py-4 text-slate-500">{d.qualification}</td>
@@ -530,7 +566,7 @@ const DoctorModule = ({ formData, handleInputChange, onSubmit, mailingStatus, do
     <div className="max-w-2xl mx-auto space-y-6 pb-20 animate-in fade-in">
       <div className="p-6 bg-slate-100 border border-slate-200 rounded-2xl relative overflow-hidden">
         <div className="flex justify-between items-center mb-6">
-          <h4 className="text-[9px] font-bold uppercase text-slate-400 flex items-center gap-2"><Info size={14} /> Clinical Summary</h4>
+          <h4 className="text-[9px] font-bold uppercase text-slate-400 flex items-center gap-2 text-left"><Info size={14} /> Clinical Summary</h4>
           {patientHistory.length > 0 && (
              <button onClick={() => setShowHistory(!showHistory)} className="bg-white border border-slate-200 px-3 py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all flex items-center gap-1 hover:bg-slate-50">{showHistory ? "Back to Current" : `History (${patientHistory.length})`}</button>
           )}
@@ -586,6 +622,9 @@ const App = () => {
   const [viewingOldReports, setViewingOldReports] = useState(null);
   const [adminActiveTab, setAdminActiveTab] = useState('register');
   const [doctors, setDoctors] = useState([]);
+  
+  // Custom Modal State
+  const [modal, setModal] = useState({ open: false, title: '', message: '', type: 'info', action: null });
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -667,6 +706,10 @@ const App = () => {
     return () => unsub();
   }, [user, consultationId]);
 
+  const showAlert = (title, message, type = 'info', action = null) => {
+    setModal({ open: true, title, message, type, action });
+  };
+
   const handleInputChange = (e) => { 
     if (status === 'completed' && role === 'doctor') return; 
     const { name, value } = e.target;
@@ -688,7 +731,7 @@ const App = () => {
 
   const initiateConsultation = async () => {
     if (!formData.doctorId || !formData.patientName) { 
-      alert("Doctor assignment and Patient Name required."); 
+      showAlert("Missing Data", "Doctor assignment and Patient Name are required to start a case.", "error");
       return; 
     }
     const cId = `CASE-${Date.now()}`;
@@ -697,16 +740,33 @@ const App = () => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'consultations', cId), newCase);
     setConsultationId(cId);
     setStatus('pending');
-    alert("Session Link: " + window.location.origin + window.location.pathname + "?consultationId=" + cId);
+    
+    const sessionLink = window.location.origin + window.location.pathname + "?consultationId=" + cId;
+    showAlert(
+      "Session Created", 
+      `The session is live. Share this link with the specialist:\n\n${sessionLink}`, 
+      "success", 
+      { label: "Copy Link", fn: () => copyToClipboard(sessionLink) }
+    );
+  };
+
+  const copyToClipboard = (text) => {
+    const el = document.createElement('textarea');
+    el.value = text;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    showAlert("Copied!", "Link has been copied to your clipboard.", "success");
   };
 
   const updateCaseData = async () => {
     if (!consultationId) { 
-      alert("Record details loaded locally. Start a session to save permanently."); 
+      showAlert("No Active Session", "Please start a consultation session to save this record permanently to the cloud.", "info");
       return; 
     }
     await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'consultations', consultationId), formData);
-    alert("Record updated.");
+    showAlert("Updated", "Patient record and progress saved.", "success");
   };
 
   const submitPrescription = async () => {
@@ -723,6 +783,16 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      <GlobalModal 
+        isOpen={modal.open}
+        title={modal.title}
+        message={modal.message}
+        type={modal.type}
+        onClose={() => setModal({ ...modal, open: false })}
+        actionLabel={modal.action?.label}
+        onAction={modal.action?.fn}
+      />
+
       {/* Historical Viewer Modals */}
       {viewingOldRecord && (
         <div className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -763,7 +833,7 @@ const App = () => {
           <AdminModule 
             formData={formData} handleInputChange={handleInputChange} onInitiate={initiateConsultation} onUpdate={updateCaseData}
             status={status} consultationId={consultationId} consultationsList={consultationsList} updateBillingStatus={updateBillingStatus} 
-            doctors={doctors}
+            doctors={doctors} showAlert={showAlert}
             patientHistory={patientHistory} setViewingOldRecord={setViewingOldRecord} setViewingOldReports={setViewingOldReports}
             activeTab={adminActiveTab} setActiveTab={setAdminActiveTab} setFormData={setFormData} setStatus={setStatus} setConsultationId={setConsultationId}
           />
