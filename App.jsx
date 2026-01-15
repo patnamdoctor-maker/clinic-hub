@@ -24,6 +24,7 @@ const defaultConfig = {
     appId: "1:819118122911:web:e3b9f8ebad901db1bbbfaa",
     measurementId: "G-DYHEGBH36V"
 };
+// Changed the literal
 
 const getFirebaseConfig = () => {
   if (typeof __firebase_config !== 'undefined' && __firebase_config) {
