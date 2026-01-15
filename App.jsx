@@ -22,7 +22,7 @@ const defaultConfig = {
     storageBucket: "patnam-clinic-hub.firebasestorage.app",
     messagingSenderId: "819118122911",
     appId: "1:819118122911:web:e3b9f8ebad901db1bbbfaa",
-    measurementId: "G-DYHEGBH36V”
+    measurementId: "G-DYHEGBH36V"
 };
 
 const getFirebaseConfig = () => {
