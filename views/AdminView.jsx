@@ -24,7 +24,7 @@ const AdminView = ({ appLogo, setAppLogo, prescriptionLogo, setPrescriptionLogo,
   const [docForm, setDocForm] = useState({ name: '', spec: '', designation: '', email: '', password: '', googleMeetUrl: '', qualification: '', registration: '', signatureUrl: '', availability: {} });
   const [recForm, setRecForm] = useState({ username: '', email: '', password: '', mobile: '', address: '' });
   
-  const [clinicForm, setClinicForm] = useState(clinicSettings || DEFAULT_CLINIC_DETAILS);
+  const [clinicForm, setClinicForm] = useState(() => clinicSettings || DEFAULT_CLINIC_DETAILS);
 
   useEffect(() => {
     const unsubDocs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'doctors'), (snap) => setDoctors(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -32,6 +32,15 @@ const AdminView = ({ appLogo, setAppLogo, prescriptionLogo, setPrescriptionLogo,
     const unsubCons = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'consultations'), (snap) => setAllConsultations(snap.docs.map(d => ({id: d.id, ...d.data()}))));
     return () => { unsubDocs(); unsubRecs(); unsubCons(); };
   }, []);
+
+  // Sync clinicForm when clinicSettings changes
+  useEffect(() => {
+    if (clinicSettings) {
+      setClinicForm({ ...DEFAULT_CLINIC_DETAILS, ...clinicSettings });
+    } else {
+      setClinicForm(DEFAULT_CLINIC_DETAILS);
+    }
+  }, [clinicSettings]);
 
   const handleLogoUpload = async (e, type) => {
       const file = e.target.files[0];

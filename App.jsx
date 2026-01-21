@@ -68,7 +68,25 @@ export default function App() {
        {currentUser.role === 'doctor' && <DoctorView user={firebaseUser} currentDoctor={currentUser} logo={appLogo} prescriptionLogo={prescriptionLogo} clinicSettings={clinicSettings} />}
       </main>
       <style>{`
-        @media print { @page { margin: 0; } body { background: white; } body > *:not(#root) { display: none; } #root > div { min-height: 0; } }
+        @media print { 
+          @page { 
+            margin: 0; 
+            size: A4;
+          } 
+          body { 
+            background: white !important; 
+          } 
+          body > *:not(#root) { 
+            display: none; 
+          } 
+          #root > div { 
+            min-height: 0; 
+          }
+          /* Hide everything except prescription when printing */
+          .print\\:hidden {
+            display: none !important;
+          }
+        }
         .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
