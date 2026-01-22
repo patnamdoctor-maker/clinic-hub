@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Hash, Activity, FileText, FilePlus, Image as ImageIcon, Printer, Plus } from 'lucide-react';
+import { User, Hash, Activity, FileText, FilePlus, Image as ImageIcon, Printer, Download, ExternalLink } from 'lucide-react';
 import { formatDate } from '../utils';
 
 const PatientProfile = ({ patient, history = [], onClose, onViewPrescription }) => {
@@ -184,14 +184,25 @@ const PatientProfile = ({ patient, history = [], onClose, onViewPrescription }) 
                                                     <p className="font-bold text-sm text-slate-800 truncate">{report.name}</p>
                                                     <p className="text-xs text-slate-500">{formatDate(report.date?.seconds)}</p>
                                                 </div>
-                                                <a 
-                                                    href={report.data} 
-                                                    download={report.name} 
-                                                    className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                                                    title="Download"
-                                                >
-                                                    <Plus className="rotate-45" size={20}/>
-                                                </a>
+                                                <div className="flex items-center gap-1">
+                                                    <a 
+                                                        href={report.data} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition"
+                                                        title="Open in new tab"
+                                                    >
+                                                        <ExternalLink size={18}/>
+                                                    </a>
+                                                    <a 
+                                                        href={report.data} 
+                                                        download={report.name} 
+                                                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                                        title="Download"
+                                                    >
+                                                        <Download size={18}/>
+                                                    </a>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
