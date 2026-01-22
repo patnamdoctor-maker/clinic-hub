@@ -501,6 +501,13 @@ const PrescriptionPreview = ({ patient, doctor, clinicalData, onClose, onPrint, 
                     <p className="whitespace-pre-wrap pl-1 break-words">{clinicalData.followUp}</p>
                   </div>
                 )}
+                
+                {clinicalData.followUpDate && (
+                  <div className="prescription-section">
+                    <h3 className="font-bold underline mb-1">Follow-up Date:</h3>
+                    <p className="pl-1">{new Date(clinicalData.followUpDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                  </div>
+                )}
               </div>
 
                     {/* Signature */}

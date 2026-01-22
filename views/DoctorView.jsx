@@ -25,6 +25,10 @@ const DoctorView = ({ user, currentDoctor, logo, prescriptionLogo, clinicSetting
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
   const [filterStatus, setFilterStatus] = useState('all');
   
+  // Follow-up Filters
+  const [followUpFilterType, setFollowUpFilterType] = useState('today');
+  const [followUpCustomRange, setFollowUpCustomRange] = useState({ start: '', end: '' });
+  
   // Password Change
   const [newPassword, setNewPassword] = useState('');
   
@@ -33,7 +37,8 @@ const DoctorView = ({ user, currentDoctor, logo, prescriptionLogo, clinicSetting
   const [viewingProfileHistory, setViewingProfileHistory] = useState([]);
   const [viewingProfilePrescription, setViewingProfilePrescription] = useState(null);
 
-  const [clinicalData, setClinicalData] = useState({ chiefComplaint: '', history: '', examFindings: '', provisionalDiagnosis: '', prevInvestigations: '', advisedInvestigations: '', medications: '', followUp: '' });
+  const [clinicalData, setClinicalData] = useState({ chiefComplaint: '', history: '', examFindings: '', provisionalDiagnosis: '', prevInvestigations: '', advisedInvestigations: '', medications: '', followUp: '', followUpDate: '' });
+  const [hasFollowUp, setHasFollowUp] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -52,8 +57,13 @@ const DoctorView = ({ user, currentDoctor, logo, prescriptionLogo, clinicSetting
   const handleStartConsult = (patient) => {
     setSelectedPatient(patient);
     setIsPreviewMode(patient.status === 'completed');
-    if (patient.clinicalData) setClinicalData(patient.clinicalData);
-    else setClinicalData({ chiefComplaint: '', history: '', examFindings: '', provisionalDiagnosis: '', prevInvestigations: '', advisedInvestigations: '', medications: '', followUp: '' });
+    if (patient.clinicalData) {
+      setClinicalData(patient.clinicalData);
+      setHasFollowUp(!!patient.clinicalData.followUpDate);
+    } else {
+      setClinicalData({ chiefComplaint: '', history: '', examFindings: '', provisionalDiagnosis: '', prevInvestigations: '', advisedInvestigations: '', medications: '', followUp: '', followUpDate: '' });
+      setHasFollowUp(false);
+    }
     setActiveView('consult');
   };
   
@@ -133,6 +143,40 @@ const DoctorView = ({ user, currentDoctor, logo, prescriptionLogo, clinicSetting
       return dateMatch && statusMatch;
   });
 
+  // Filter follow-ups based on followUpDate
+  const filteredFollowUps = patients.filter(p => {
+      if (!p.clinicalData?.followUpDate) return false;
+      
+      const followUpDate = new Date(p.clinicalData.followUpDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      let dateMatch = false;
+      
+      if (followUpFilterType === 'today') {
+          dateMatch = followUpDate.toDateString() === today.toDateString();
+      } else if (followUpFilterType === '7days') {
+          const nextWeek = new Date();
+          nextWeek.setDate(today.getDate() + 7);
+          dateMatch = followUpDate >= today && followUpDate <= nextWeek;
+      } else if (followUpFilterType === '30days') {
+          const nextMonth = new Date();
+          nextMonth.setDate(today.getDate() + 30);
+          dateMatch = followUpDate >= today && followUpDate <= nextMonth;
+      } else if (followUpFilterType === 'custom' && followUpCustomRange.start && followUpCustomRange.end) {
+          const startDate = new Date(followUpCustomRange.start);
+          const endDate = new Date(followUpCustomRange.end);
+          endDate.setHours(23, 59, 59, 999);
+          dateMatch = followUpDate >= startDate && followUpDate <= endDate;
+      }
+      
+      return dateMatch;
+  }).sort((a, b) => {
+      const dateA = a.clinicalData?.followUpDate ? new Date(a.clinicalData.followUpDate) : new Date();
+      const dateB = b.clinicalData?.followUpDate ? new Date(b.clinicalData.followUpDate) : new Date();
+      return dateA - dateB;
+  });
+
   if (activeView === 'dashboard') {
       const totalPending = filteredPatients.filter(p => p.status === 'pending').length;
       const totalCompleted = filteredPatients.filter(p => p.status === 'completed').length;
@@ -187,6 +231,68 @@ const DoctorView = ({ user, currentDoctor, logo, prescriptionLogo, clinicSetting
                <div className="bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
                    <div className="flex justify-between items-start"><div><p className="text-xs font-bold uppercase text-green-600 mb-1">Completed</p><h3 className="text-4xl font-bold text-slate-800">{totalCompleted}</h3></div><CheckCircle className="text-green-100" size={40}/></div>
                </div>
+           </div>
+
+            {/* Pending Follow-ups Section */}
+            <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-100 mb-6">
+               <div className="flex justify-between items-center mb-6">
+                   <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Clock className="text-purple-500"/> Pending Follow-ups</h3>
+               </div>
+               
+               {/* Follow-up Filters */}
+               <div className="bg-slate-50 p-4 rounded-xl mb-6 flex flex-wrap gap-4 items-end">
+                   <div>
+                       <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Date Range</label>
+                       <select className="border p-2 rounded-lg text-sm bg-white" value={followUpFilterType} onChange={(e) => setFollowUpFilterType(e.target.value)}>
+                           <option value="today">Today</option>
+                           <option value="7days">Next 7 Days</option>
+                           <option value="30days">Next 30 Days</option>
+                           <option value="custom">Custom Range</option>
+                       </select>
+                   </div>
+                   {followUpFilterType === 'custom' && (
+                       <div className="flex gap-2">
+                           <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Start Date</label>
+                               <input type="date" className="border p-2 rounded-lg text-sm bg-white" value={followUpCustomRange.start} onChange={e => setFollowUpCustomRange({...followUpCustomRange, start: e.target.value})} />
+                           </div>
+                           <div>
+                               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">End Date</label>
+                               <input type="date" className="border p-2 rounded-lg text-sm bg-white" value={followUpCustomRange.end} onChange={e => setFollowUpCustomRange({...followUpCustomRange, end: e.target.value})} />
+                           </div>
+                       </div>
+                   )}
+               </div>
+               
+               {filteredFollowUps.length === 0 ? (
+                   <div className="text-center py-10 text-slate-400">No pending follow-ups found for this date range.</div>
+               ) : (
+                   <div className="space-y-4">
+                       {filteredFollowUps.map(p => {
+                           const followUpDate = p.clinicalData?.followUpDate ? new Date(p.clinicalData.followUpDate) : null;
+                           const isToday = followUpDate && followUpDate.toDateString() === new Date().toDateString();
+                           const isOverdue = followUpDate && followUpDate < new Date();
+                           
+                           return (
+                               <div key={p.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition cursor-pointer" onClick={() => handleStartConsult(p)}>
+                                   <div className="flex items-center gap-4">
+                                       <div className={`w-2 h-12 rounded-full ${isOverdue ? 'bg-red-500' : isToday ? 'bg-orange-500' : 'bg-purple-500'}`}></div>
+                                       <div>
+                                           <h4 className="font-bold text-slate-800">{p.name}</h4>
+                                           <p className="text-xs text-slate-500">
+                                               Follow-up: {followUpDate ? followUpDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                                               {isOverdue && <span className="ml-2 text-red-600 font-bold">(Overdue)</span>}
+                                               {isToday && <span className="ml-2 text-orange-600 font-bold">(Today)</span>}
+                                           </p>
+                                           <p className="text-xs text-slate-400">Last Visit: {formatDate(p.createdAt?.seconds)}</p>
+                                       </div>
+                                   </div>
+                                   <button className="px-4 py-2 bg-purple-50 text-purple-600 rounded-lg text-xs font-bold uppercase hover:bg-purple-100">View</button>
+                               </div>
+                           );
+                       })}
+                   </div>
+               )}
            </div>
 
             <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-100">
@@ -327,15 +433,54 @@ const DoctorView = ({ user, currentDoctor, logo, prescriptionLogo, clinicSetting
              <div className="space-y-6">
                <h3 className="font-bold text-xl border-b pb-4 text-slate-800 flex items-center gap-2"><Pill className="text-blue-500"/> Orders & Prescription</h3>
                <div className="space-y-4">
-                  {['Previous Investigations', 'Investigations Advised', 'Medications (Rx)', 'Advice / Follow Up'].map((label, i) => (
+                  {['Previous Investigations', 'Investigations Advised', 'Medications (Rx)'].map((label, i) => (
                       <div key={i}>
                           <label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">{label}</label>
                           <textarea rows={i===2 ? 6 : 2} className={`w-full border-2 border-slate-100 p-3 rounded-xl bg-slate-50/50 focus:bg-white focus:border-blue-400 outline-none transition resize-none ${i===2 ? 'font-mono text-sm' : ''}`}
                              placeholder={i===2 ? 'Tab. Name - Dose - Frequency - Duration' : ''}
-                             value={i===0?clinicalData.prevInvestigations:i===1?clinicalData.advisedInvestigations:i===2?clinicalData.medications:clinicalData.followUp}
-                             onChange={e => setClinicalData({...clinicalData, [i===0?'prevInvestigations':i===1?'advisedInvestigations':i===2?'medications':'followUp']: e.target.value})} />
+                             value={i===0?clinicalData.prevInvestigations:i===1?clinicalData.advisedInvestigations:clinicalData.medications}
+                             onChange={e => setClinicalData({...clinicalData, [i===0?'prevInvestigations':i===1?'advisedInvestigations':'medications']: e.target.value})} />
                       </div>
                    ))}
+                  
+                  {/* Advice / Follow Up Section */}
+                  <div>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Advice / Follow Up</label>
+                      <textarea rows={2} className="w-full border-2 border-slate-100 p-3 rounded-xl bg-slate-50/50 focus:bg-white focus:border-blue-400 outline-none transition resize-none mb-3"
+                         placeholder="General advice or instructions"
+                         value={clinicalData.followUp}
+                         onChange={e => setClinicalData({...clinicalData, followUp: e.target.value})} />
+                      
+                      <div className="flex items-center gap-3 mb-3">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                              <input 
+                                  type="checkbox" 
+                                  checked={hasFollowUp}
+                                  onChange={(e) => {
+                                      setHasFollowUp(e.target.checked);
+                                      if (!e.target.checked) {
+                                          setClinicalData({...clinicalData, followUpDate: ''});
+                                      }
+                                  }}
+                                  className="w-5 h-5 text-blue-600 border-2 border-slate-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                              />
+                              <span className="text-sm font-semibold text-slate-700">Follow-up Required</span>
+                          </label>
+                      </div>
+                      
+                      {hasFollowUp && (
+                          <div>
+                              <label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Follow-up Date</label>
+                              <input 
+                                  type="date" 
+                                  value={clinicalData.followUpDate || ''}
+                                  onChange={e => setClinicalData({...clinicalData, followUpDate: e.target.value})}
+                                  className="w-full border-2 border-slate-100 p-3 rounded-xl bg-slate-50/50 focus:bg-white focus:border-blue-400 outline-none transition"
+                                  min={new Date().toISOString().split('T')[0]}
+                              />
+                          </div>
+                      )}
+                  </div>
                </div>
                <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
                   <button onClick={() => handleSaveConsult('pending')} className="px-6 py-3 border-2 border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition">Save Draft</button>
