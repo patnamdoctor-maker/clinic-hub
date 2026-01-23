@@ -189,6 +189,7 @@ const DoctorView = ({ user, currentDoctor, logo, prescriptionLogo, clinicSetting
                    <p className="text-slate-500">Overview</p>
                </div>
                <div className="flex gap-3">
+                   <button onClick={() => setActiveView('followups')} className="flex items-center gap-2 bg-purple-600 text-white px-6 py-3 rounded-xl shadow-lg hover:bg-purple-700 transition font-bold"><Clock size={18}/> Follow-ups</button>
                    <button onClick={() => setActiveView('list')} className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl shadow-lg hover:bg-blue-700 transition font-bold"><Calendar size={18}/> View All Patients</button>
                    <button onClick={() => setShowSettings(true)} className="flex items-center gap-2 bg-white text-slate-700 border border-slate-200 px-4 py-3 rounded-xl hover:bg-slate-50 shadow-sm font-semibold transition"><Settings size={18}/></button>
                </div>
@@ -233,68 +234,6 @@ const DoctorView = ({ user, currentDoctor, logo, prescriptionLogo, clinicSetting
                </div>
            </div>
 
-            {/* Pending Follow-ups Section */}
-            <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-100 mb-6">
-               <div className="flex justify-between items-center mb-6">
-                   <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Clock className="text-purple-500"/> Pending Follow-ups</h3>
-               </div>
-               
-               {/* Follow-up Filters */}
-               <div className="bg-slate-50 p-4 rounded-xl mb-6 flex flex-wrap gap-4 items-end">
-                   <div>
-                       <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Date Range</label>
-                       <select className="border p-2 rounded-lg text-sm bg-white" value={followUpFilterType} onChange={(e) => setFollowUpFilterType(e.target.value)}>
-                           <option value="today">Today</option>
-                           <option value="7days">Next 7 Days</option>
-                           <option value="30days">Next 30 Days</option>
-                           <option value="custom">Custom Range</option>
-                       </select>
-                   </div>
-                   {followUpFilterType === 'custom' && (
-                       <div className="flex gap-2">
-                           <div>
-                               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Start Date</label>
-                               <input type="date" className="border p-2 rounded-lg text-sm bg-white" value={followUpCustomRange.start} onChange={e => setFollowUpCustomRange({...followUpCustomRange, start: e.target.value})} />
-                           </div>
-                           <div>
-                               <label className="text-xs font-bold text-slate-500 uppercase block mb-1">End Date</label>
-                               <input type="date" className="border p-2 rounded-lg text-sm bg-white" value={followUpCustomRange.end} onChange={e => setFollowUpCustomRange({...followUpCustomRange, end: e.target.value})} />
-                           </div>
-                       </div>
-                   )}
-               </div>
-               
-               {filteredFollowUps.length === 0 ? (
-                   <div className="text-center py-10 text-slate-400">No pending follow-ups found for this date range.</div>
-               ) : (
-                   <div className="space-y-4">
-                       {filteredFollowUps.map(p => {
-                           const followUpDate = p.clinicalData?.followUpDate ? new Date(p.clinicalData.followUpDate) : null;
-                           const isToday = followUpDate && followUpDate.toDateString() === new Date().toDateString();
-                           const isOverdue = followUpDate && followUpDate < new Date();
-                           
-                           return (
-                               <div key={p.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition cursor-pointer" onClick={() => handleStartConsult(p)}>
-                                   <div className="flex items-center gap-4">
-                                       <div className={`w-2 h-12 rounded-full ${isOverdue ? 'bg-red-500' : isToday ? 'bg-orange-500' : 'bg-purple-500'}`}></div>
-                                       <div>
-                                           <h4 className="font-bold text-slate-800">{p.name}</h4>
-                                           <p className="text-xs text-slate-500">
-                                               Follow-up: {followUpDate ? followUpDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
-                                               {isOverdue && <span className="ml-2 text-red-600 font-bold">(Overdue)</span>}
-                                               {isToday && <span className="ml-2 text-orange-600 font-bold">(Today)</span>}
-                                           </p>
-                                           <p className="text-xs text-slate-400">Last Visit: {formatDate(p.createdAt?.seconds)}</p>
-                                       </div>
-                                   </div>
-                                   <button className="px-4 py-2 bg-purple-50 text-purple-600 rounded-lg text-xs font-bold uppercase hover:bg-purple-100">View</button>
-                               </div>
-                           );
-                       })}
-                   </div>
-               )}
-           </div>
-
             <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-100">
                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Calendar className="text-blue-500"/> Filtered List</h3></div>
                   {filteredPatients.length === 0 ? <div className="text-center py-10 text-slate-400">No appointments found for this filter.</div> : (
@@ -337,6 +276,89 @@ const DoctorView = ({ user, currentDoctor, logo, prescriptionLogo, clinicSetting
                   onViewPrescription={(consult) => setViewingProfilePrescription(consult)}
                />
           </div>
+      );
+  }
+
+  if (activeView === 'followups') {
+      return (
+        <div className="max-w-7xl mx-auto p-6">
+            <div className="flex justify-between items-center mb-8">
+               <div>
+                  <h2 className="text-3xl font-bold text-slate-800">Pending Follow-ups</h2>
+                   <p className="text-slate-500">View and manage patient follow-up appointments</p>
+               </div>
+               <div className="flex gap-3">
+                   <button onClick={() => setActiveView('dashboard')} className="flex items-center gap-2 text-slate-600 hover:text-blue-600 font-bold transition"><LayoutDashboard size={20}/> Back to Dashboard</button>
+                   <button onClick={() => setShowSettings(true)} className="flex items-center gap-2 bg-white text-slate-700 border border-slate-200 px-4 py-3 rounded-xl hover:bg-slate-50 shadow-sm font-semibold transition"><Settings size={18}/></button>
+               </div>
+           </div>
+
+            {/* Follow-up Filters */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-6 flex flex-wrap gap-4 items-end">
+               <div>
+                   <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Date Range</label>
+                   <select className="border p-2 rounded-lg text-sm bg-slate-50" value={followUpFilterType} onChange={(e) => setFollowUpFilterType(e.target.value)}>
+                       <option value="today">Today</option>
+                       <option value="7days">Next 7 Days</option>
+                       <option value="30days">Next 30 Days</option>
+                       <option value="custom">Custom Range</option>
+                   </select>
+               </div>
+               {followUpFilterType === 'custom' && (
+                   <div className="flex gap-2">
+                       <div>
+                           <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Start Date</label>
+                           <input type="date" className="border p-2 rounded-lg text-sm" value={followUpCustomRange.start} onChange={e => setFollowUpCustomRange({...followUpCustomRange, start: e.target.value})} />
+                       </div>
+                       <div>
+                           <label className="text-xs font-bold text-slate-500 uppercase block mb-1">End Date</label>
+                           <input type="date" className="border p-2 rounded-lg text-sm" value={followUpCustomRange.end} onChange={e => setFollowUpCustomRange({...followUpCustomRange, end: e.target.value})} />
+                       </div>
+                   </div>
+               )}
+           </div>
+
+            <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-100">
+               <div className="flex justify-between items-center mb-6">
+                   <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Clock className="text-purple-500"/> Follow-up Appointments</h3>
+                   <span className="text-sm text-slate-500 font-semibold">{filteredFollowUps.length} {filteredFollowUps.length === 1 ? 'appointment' : 'appointments'}</span>
+               </div>
+               
+               {filteredFollowUps.length === 0 ? (
+                   <div className="text-center py-12 text-slate-400">
+                       <Clock className="mx-auto mb-3 text-slate-300" size={48}/>
+                       <p className="text-lg font-semibold">No pending follow-ups found</p>
+                       <p className="text-sm mt-1">for the selected date range.</p>
+                   </div>
+               ) : (
+                   <div className="space-y-4">
+                       {filteredFollowUps.map(p => {
+                           const followUpDate = p.clinicalData?.followUpDate ? new Date(p.clinicalData.followUpDate) : null;
+                           const isToday = followUpDate && followUpDate.toDateString() === new Date().toDateString();
+                           const isOverdue = followUpDate && followUpDate < new Date();
+                           
+                           return (
+                               <div key={p.id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-slate-50 transition cursor-pointer" onClick={() => handleStartConsult(p)}>
+                                   <div className="flex items-center gap-4">
+                                       <div className={`w-2 h-12 rounded-full ${isOverdue ? 'bg-red-500' : isToday ? 'bg-orange-500' : 'bg-purple-500'}`}></div>
+                                       <div>
+                                           <h4 className="font-bold text-slate-800">{p.name}</h4>
+                                           <p className="text-xs text-slate-500">
+                                               Follow-up: {followUpDate ? followUpDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+                                               {isOverdue && <span className="ml-2 text-red-600 font-bold">(Overdue)</span>}
+                                               {isToday && <span className="ml-2 text-orange-600 font-bold">(Today)</span>}
+                                           </p>
+                                           <p className="text-xs text-slate-400">Last Visit: {formatDate(p.createdAt?.seconds)}</p>
+                                       </div>
+                                   </div>
+                                   <button className="px-4 py-2 bg-purple-50 text-purple-600 rounded-lg text-xs font-bold uppercase hover:bg-purple-100">View</button>
+                               </div>
+                           );
+                       })}
+                   </div>
+               )}
+           </div>
+        </div>
       );
   }
 
