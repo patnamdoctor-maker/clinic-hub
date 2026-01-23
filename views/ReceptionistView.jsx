@@ -30,6 +30,7 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
   const [viewingPatient, setViewingPatient] = useState(null);
   const [viewingDoctor, setViewingDoctor] = useState(null);
   
@@ -69,6 +70,31 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
   };
 
   const selectPatient = (p) => { setFormData({ ...formData, name: p.name, age: p.age, sex: p.sex, aadhaar: p.aadhaar || '', chronicConditions: p.chronicConditions || '', phone: p.phone || '', email: p.email || '' }); setSearchQuery(''); setSearchResults([]); };
+
+  // Fuzzy match function for doctor search
+  const fuzzyMatch = (text, query) => {
+    if (!query) return true;
+    const textLower = text.toLowerCase();
+    const queryLower = query.toLowerCase();
+    // Check if query is a substring of text
+    if (textLower.includes(queryLower)) return true;
+    // Check if all characters of query appear in order in text (fuzzy match)
+    let queryIndex = 0;
+    for (let i = 0; i < textLower.length && queryIndex < queryLower.length; i++) {
+      if (textLower[i] === queryLower[queryIndex]) {
+        queryIndex++;
+      }
+    }
+    return queryIndex === queryLower.length;
+  };
+
+  // Filter doctors based on search query (name and specialty)
+  const filteredDoctors = doctors.filter(doctor => {
+    if (!doctorSearchQuery) return true;
+    const nameMatch = fuzzyMatch(doctor.name || '', doctorSearchQuery);
+    const specMatch = fuzzyMatch(doctor.spec || '', doctorSearchQuery);
+    return nameMatch || specMatch;
+  });
 
   const handleDoctorChange = (e) => {
       const docId = e.target.value;
@@ -413,7 +439,21 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div>
                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2 ml-1">Doctor</label>
-                 <select className="w-full p-4 border-2 rounded-xl" value={formData.doctorId} onChange={handleDoctorChange}><option value="">Select Doctor</option>{doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+                 <input
+                   type="text"
+                   placeholder="Search doctor by name or specialty..."
+                   className="w-full p-3 border-2 rounded-xl mb-2 text-sm"
+                   value={doctorSearchQuery}
+                   onChange={(e) => setDoctorSearchQuery(e.target.value)}
+                 />
+                 <select className="w-full p-4 border-2 rounded-xl" value={formData.doctorId} onChange={handleDoctorChange}>
+                   <option value="">Select Doctor</option>
+                   {filteredDoctors.map(d => (
+                     <option key={d.id} value={d.id}>
+                       {d.name}{d.spec ? ` (${d.spec})` : ''}
+                     </option>
+                   ))}
+                 </select>
                  {selectedDoctor && selectedDoctor.availability && selectedDoctor.availability[currentDayName] && (
                         <div className="mt-4 bg-blue-50 text-blue-900 p-4 rounded-xl border border-blue-100 shadow-inner">
                             <span className="font-bold flex items-center gap-2 mb-2 text-xs uppercase tracking-wider"><Clock size={14}/> Doctor's Availability ({currentDayName})</span> 
@@ -497,7 +537,7 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
                <div className="flex justify-between items-center mb-6">
                    <h2 className="text-xl font-bold">Consultations</h2>
                    <div className="flex gap-2">
-                       <select className="border p-2 rounded-lg" value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)}><option value="all">All Doctors</option>{doctors.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+                       <select className="border p-2 rounded-lg" value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)}><option value="all">All Doctors</option>{doctors.map(d => <option key={d.id} value={d.id}>{d.name}{d.spec ? ` (${d.spec})` : ''}</option>)}</select>
                        <select className="border p-2 rounded-lg" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}><option value="all">All Status</option><option value="pending">Pending</option><option value="completed">Completed</option></select>
                    </div>
                </div>
