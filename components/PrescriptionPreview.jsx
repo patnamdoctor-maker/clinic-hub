@@ -6,6 +6,15 @@ const PrescriptionPreview = ({ patient, doctor, clinicalData, onClose, onPrint, 
   if (!patient || !doctor || !clinicalData) return null;
   
   const details = clinicSettings || DEFAULT_CLINIC_DETAILS;
+  
+  const handlePrint = () => {
+    document.body.classList.add('printing-prescription');
+    window.print();
+    // Remove class after a short delay to allow print to complete
+    setTimeout(() => {
+      document.body.classList.remove('printing-prescription');
+    }, 1000);
+  };
 
   return (
     <>
@@ -15,6 +24,52 @@ const PrescriptionPreview = ({ patient, doctor, clinicalData, onClose, onPrint, 
           @page {
             size: A4;
             margin: 12mm 10mm 15mm 10mm; /* Top, Right, Bottom, Left */
+          }
+          
+          /* When printing prescription, hide Header */
+          body.printing-prescription header,
+          body.printing-prescription [class*="bg-gradient-to-r"] {
+            display: none !important;
+          }
+          
+          /* Hide main's padding but keep structure */
+          main {
+            display: block !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+          }
+          
+          /* Hide ALL dashboard content - be very aggressive */
+          body.printing-prescription .max-w-7xl > * {
+            display: none !important;
+          }
+          
+          /* Show ONLY prescription preview */
+          body.printing-prescription .max-w-7xl > [data-prescription-print="true"] {
+            display: flex !important;
+            position: relative !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            background: white !important;
+            backdrop-filter: none !important;
+            z-index: 1 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+          }
+          
+          /* Ensure prescription container and all its children are visible */
+          body.printing-prescription [data-prescription-print="true"] * {
+            visibility: visible !important;
+          }
+          
+          /* Hide PatientProfile, BillingModal and other modals */
+          body.printing-prescription [class*="PatientProfile"],
+          body.printing-prescription [class*="BillingModal"] {
+            display: none !important;
           }
           
           * {
@@ -30,6 +85,29 @@ const PrescriptionPreview = ({ patient, doctor, clinicalData, onClose, onPrint, 
             width: 100% !important;
             height: auto !important;
             overflow: visible !important;
+          }
+          
+          /* Make prescription preview wrapper visible and relative */
+          [data-prescription-print="true"] {
+            position: relative !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            background: white !important;
+            backdrop-filter: none !important;
+            z-index: 1 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+          }
+          
+          /* Ensure all children of prescription preview are visible */
+          [data-prescription-print="true"] * {
+            visibility: visible !important;
           }
           
           .prescription-container {
@@ -363,7 +441,7 @@ const PrescriptionPreview = ({ patient, doctor, clinicalData, onClose, onPrint, 
         }
       `}</style>
 
-      <div className="fixed top-0 left-0 w-full h-full bg-slate-900/80 backdrop-blur-sm z-[9999] overflow-auto flex justify-center py-8 print:relative print:inset-0 print:bg-white print:h-auto print:overflow-visible">
+      <div className="prescription-preview-wrapper" data-prescription-print="true" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(4px)', zIndex: 9999, overflow: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', paddingTop: '2rem', paddingBottom: '2rem' }}>
         <div className="prescription-container bg-white w-full p-8 print:p-0 print:w-full print:m-0 print:max-w-full print:h-auto print:overflow-visible" style={{ maxWidth: '100%' }}>
           {/* Controls */}
           <div className="print:hidden flex justify-between mb-8 border-b pb-4 sticky top-0 bg-white z-10 font-sans">
@@ -371,7 +449,7 @@ const PrescriptionPreview = ({ patient, doctor, clinicalData, onClose, onPrint, 
             <div className="flex gap-3">
               {!readOnly && onEdit && <button onClick={onEdit} className="px-4 py-2 text-sm bg-slate-100 rounded-lg hover:bg-slate-200 font-medium text-slate-700">Edit</button>}
               <button onClick={onClose} className="px-4 py-2 text-sm bg-slate-100 rounded-lg hover:bg-slate-200 font-medium text-slate-700">Close</button>
-              <button onClick={onPrint} className="px-6 py-2 text-sm bg-blue-700 text-white rounded-lg font-bold hover:bg-blue-800 flex items-center gap-2 shadow-lg shadow-blue-500/30"><Printer size={16}/> Print</button>
+              <button onClick={handlePrint} className="px-6 py-2 text-sm bg-blue-700 text-white rounded-lg font-bold hover:bg-blue-800 flex items-center gap-2 shadow-lg shadow-blue-500/30"><Printer size={16}/> Print</button>
             </div>
           </div>
 

@@ -75,13 +75,56 @@ export default function App() {
           } 
           body { 
             background: white !important; 
+            margin: 0 !important;
+            padding: 0 !important;
           } 
+          
+          /* Hide everything by default */
           body > *:not(#root) { 
-            display: none; 
+            display: none !important; 
           } 
-          #root > div { 
-            min-height: 0; 
+          
+          /* Reset root container for printing */
+          #root {
+            background: white !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: auto !important;
           }
+          
+          #root > div {
+            background: white !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+          }
+          
+          /* Hide Header */
+          header,
+          [class*="bg-gradient-to-r"][class*="from-slate-900"] {
+            display: none !important;
+          }
+          
+          /* Hide main element's padding/margin but keep it for structure */
+          main {
+            display: block !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+            width: 100% !important;
+            height: auto !important;
+          }
+          
+          /* When printing prescription, hide dashboard elements */
+          body.printing-prescription .max-w-7xl > div:not([data-prescription-print]),
+          body.printing-prescription .max-w-7xl > section,
+          body.printing-prescription .max-w-7xl > nav {
+            display: none !important;
+          }
+          
           /* Hide everything except prescription when printing */
           .print\\:hidden {
             display: none !important;
