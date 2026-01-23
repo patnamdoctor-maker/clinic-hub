@@ -2,7 +2,7 @@ import React from 'react';
 import { FileText, Printer } from 'lucide-react';
 import { DEFAULT_LOGO, DEFAULT_CLINIC_DETAILS } from '../constants';
 
-const PrescriptionPreview = ({ patient, doctor, clinicalData, onClose, onPrint, onEdit, readOnly, logo, clinicSettings }) => {
+const PrescriptionPreview = ({ patient, doctor, clinicalData, onClose, onPrint, onEdit, readOnly, logo, clinicSettings, showSignatureSettings, onSignatureSettingsChange }) => {
   if (!patient || !doctor || !clinicalData) return null;
   
   const details = clinicSettings || DEFAULT_CLINIC_DETAILS;
@@ -375,6 +375,73 @@ const PrescriptionPreview = ({ patient, doctor, clinicalData, onClose, onPrint, 
             </div>
           </div>
 
+          {/* Signature Settings - Inside Preview */}
+          {showSignatureSettings && doctor.signatureUrl && onSignatureSettingsChange && (
+            <div className="print:hidden mb-6 bg-gradient-to-r from-purple-50 to-blue-50 p-6 rounded-xl border-2 border-purple-200">
+              <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <FileText size={20} className="text-purple-600"/> Signature Settings
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-2">
+                    Size: {doctor.signatureSize || 30}px
+                  </label>
+                  <input 
+                    type="range" 
+                    min="20" 
+                    max="80" 
+                    value={doctor.signatureSize || 30} 
+                    onChange={e => onSignatureSettingsChange({ ...doctor, signatureSize: parseInt(e.target.value) })}
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-2">
+                    Position: {doctor.signaturePosition !== undefined ? doctor.signaturePosition : (doctor.signaturePlacement === 'left' ? 0 : doctor.signaturePlacement === 'center' ? 50 : 85)}%
+                    <span className="ml-2 text-xs text-slate-500">
+                      ({doctor.signaturePosition !== undefined ? (doctor.signaturePosition < 33 ? 'Left' : doctor.signaturePosition < 67 ? 'Center' : 'Right') : (doctor.signaturePlacement === 'left' ? 'Left' : doctor.signaturePlacement === 'center' ? 'Center' : 'Right')})
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input 
+                      type="range" 
+                      min="0" 
+                      max="100" 
+                      value={doctor.signaturePosition !== undefined ? doctor.signaturePosition : (doctor.signaturePlacement === 'left' ? 0 : doctor.signaturePlacement === 'center' ? 50 : 85)} 
+                      onChange={e => onSignatureSettingsChange({ ...doctor, signaturePosition: parseInt(e.target.value) })}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                      <span>Left</span>
+                      <span>Center</span>
+                      <span>Right</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-2">Color:</label>
+                  <div className="flex gap-2 items-center">
+                    <input 
+                      type="color" 
+                      value={doctor.signatureColor || '#000000'} 
+                      onChange={e => onSignatureSettingsChange({ ...doctor, signatureColor: e.target.value })}
+                      className="w-12 h-8 border rounded cursor-pointer"
+                    />
+                    <input 
+                      type="text" 
+                      value={doctor.signatureColor || '#000000'} 
+                      onChange={e => onSignatureSettingsChange({ ...doctor, signatureColor: e.target.value })}
+                      className="flex-1 border p-2 rounded-lg text-sm bg-white font-mono"
+                      placeholder="#000000"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Prescription Content - Table structure for repeating headers/footers */}
           <table className="prescription-table">
             {/* Header - Repeats on each page */}
@@ -511,13 +578,57 @@ const PrescriptionPreview = ({ patient, doctor, clinicalData, onClose, onPrint, 
               </div>
 
                     {/* Signature */}
-                    <div className="signature-section mt-6 flex flex-col items-end">
-                      {doctor.signatureUrl ? (
-                        <img src={doctor.signatureUrl} alt="Signature" className="h-12 object-contain mb-1 print:h-10" />
-                      ) : (
-                        <div className="h-12 mb-1 flex items-end font-cursive text-lg print:h-10">Sign: ________________</div>
-                      )}
-                      <p className="font-bold text-center min-w-[200px] text-xs">({doctor.name})</p>
+                    <div 
+                      className="signature-section mt-6"
+                      style={{ 
+                        position: 'relative',
+                        width: '100%',
+                        minHeight: '60px'
+                      }}
+                    >
+                      <div 
+                        style={{ 
+                          position: 'absolute',
+                          left: `${doctor.signaturePosition !== undefined ? doctor.signaturePosition : (doctor.signaturePlacement === 'left' ? 0 : doctor.signaturePlacement === 'center' ? 50 : 85)}%`,
+                          transform: 'translateX(-50%)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          minWidth: 'fit-content'
+                        }}
+                      >
+                        {doctor.signatureUrl ? (
+                          <img 
+                            src={doctor.signatureUrl} 
+                            alt="Signature" 
+                            className="object-contain mb-1" 
+                            style={{ 
+                              height: `${doctor.signatureSize || 30}px`,
+                              maxWidth: `${(doctor.signatureSize || 30) * 3}px`,
+                              // Color tinting for images (simplified - full color requires canvas)
+                              filter: doctor.signatureColor && doctor.signatureColor !== '#000000' 
+                                ? 'brightness(0.8) contrast(1.2)' 
+                                : 'none'
+                            }}
+                          />
+                        ) : (
+                          <div 
+                            className="mb-1 flex items-end font-cursive text-lg" 
+                            style={{ 
+                              height: `${doctor.signatureSize || 30}px`,
+                              color: doctor.signatureColor || '#000000'
+                            }}
+                          >
+                            Sign: ________________
+                          </div>
+                        )}
+                        <p 
+                          className="font-bold text-center min-w-[200px] text-xs"
+                          style={{ color: doctor.signatureColor || '#000000' }}
+                        >
+                          ({doctor.name})
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </td>

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Settings, CreditCard, Briefcase, Pencil, Trash2, Mail, Phone, Save
+  Settings, CreditCard, Briefcase, Pencil, Trash2, Mail, Phone, Save, Eye
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, updateDoc, doc, deleteDoc, setDoc } from 'firebase/firestore';
 import { db, appId } from '../firebase/config';
 import { DEFAULT_CLINIC_DETAILS, DEFAULT_LOGO } from '../constants';
 import { convertFileToBase64, formatDate } from '../utils';
 import AvailabilityEditor from '../components/AvailabilityEditor';
+import PrescriptionPreview from '../components/PrescriptionPreview';
 
 const AdminView = ({ appLogo, setAppLogo, prescriptionLogo, setPrescriptionLogo, clinicSettings, setClinicSettings }) => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -21,7 +22,12 @@ const AdminView = ({ appLogo, setAppLogo, prescriptionLogo, setPrescriptionLogo,
   const [editingDocId, setEditingDocId] = useState(null);
   const [editingRecId, setEditingRecId] = useState(null);
   
-  const [docForm, setDocForm] = useState({ name: '', spec: '', designation: '', email: '', password: '', googleMeetUrl: '', qualification: '', registration: '', signatureUrl: '', availability: {} });
+  const [docForm, setDocForm] = useState({ 
+    name: '', spec: '', designation: '', email: '', password: '', googleMeetUrl: '', 
+    qualification: '', registration: '', signatureUrl: '', availability: {},
+    signatureSize: 30, signaturePosition: 85, signatureColor: '#000000'
+  });
+  const [showPreview, setShowPreview] = useState(false);
   const [recForm, setRecForm] = useState({ username: '', email: '', password: '', mobile: '', address: '' });
   
   const [clinicForm, setClinicForm] = useState(() => clinicSettings || DEFAULT_CLINIC_DETAILS);
@@ -66,13 +72,24 @@ const AdminView = ({ appLogo, setAppLogo, prescriptionLogo, setPrescriptionLogo,
         await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'doctors'), docForm); 
         alert("Doctor added"); 
       }
-      setDocForm({ name: '', spec: '', designation: '', email: '', password: '', googleMeetUrl: '', qualification: '', registration: '', signatureUrl: '', availability: {} });
+      setDocForm({ 
+        name: '', spec: '', designation: '', email: '', password: '', googleMeetUrl: '', 
+        qualification: '', registration: '', signatureUrl: '', availability: {},
+        signatureSize: 30, signaturePosition: 85, signatureColor: '#000000'
+      });
     } catch (error) { console.error(error); alert("Operation failed."); }
   };
 
   const handleEditDoctor = (d) => {
      setEditingDocId(d.id);
-     setDocForm({ name: d.name, spec: d.spec, designation: d.designation || '', email: d.email, password: d.password, googleMeetUrl: d.googleMeetUrl || '', qualification: d.qualification, registration: d.registration, signatureUrl: d.signatureUrl || '', availability: d.availability || {} });
+     setDocForm({ 
+       name: d.name, spec: d.spec, designation: d.designation || '', email: d.email, 
+       password: d.password, googleMeetUrl: d.googleMeetUrl || '', qualification: d.qualification, 
+       registration: d.registration, signatureUrl: d.signatureUrl || '', availability: d.availability || {},
+       signatureSize: d.signatureSize || 30, 
+       signaturePosition: d.signaturePosition !== undefined ? d.signaturePosition : (d.signaturePlacement === 'left' ? 10 : d.signaturePlacement === 'center' ? 50 : 85),
+       signatureColor: d.signatureColor || '#000000'
+     });
      window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -223,6 +240,59 @@ const AdminView = ({ appLogo, setAppLogo, prescriptionLogo, setPrescriptionLogo,
 
       {/* DOCTORS TAB */}
       {activeTab === 'doctors' && (
+        <>
+        {/* Prescription Preview Modal */}
+        {showPreview && docForm.name && (
+          <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 overflow-auto">
+            <div className="bg-white rounded-xl w-full max-w-7xl relative flex flex-col max-h-[95vh]">
+              <div className="flex justify-between items-center p-4 border-b border-slate-200">
+                <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                  <Eye size={20} className="text-purple-600"/> Prescription Preview with Signature Settings
+                </h3>
+                <button 
+                  onClick={() => setShowPreview(false)}
+                  className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 font-bold"
+                >
+                  Close Preview
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-auto p-4">
+                <PrescriptionPreview
+                  patient={{
+                    name: 'Sample Patient',
+                    age: '35',
+                    sex: 'Male',
+                    phone: '9876543210',
+                    weight: '70 kg',
+                    bp: '120/80',
+                    pulse: '72',
+                    uhid: 'PID-123456',
+                    createdAt: { seconds: Math.floor(Date.now() / 1000) }
+                  }}
+                  doctor={docForm}
+                  clinicalData={{
+                    chiefComplaint: 'Fever and cough for 3 days',
+                    history: 'No significant past medical history',
+                    examFindings: 'Temperature: 38.5°C, Chest clear',
+                    provisionalDiagnosis: 'Upper Respiratory Tract Infection',
+                    medications: 'Tab. Paracetamol 500mg - 1-0-1 - After meals - 5 days\nTab. Azithromycin 500mg - 1-0-0 - After meals - 3 days',
+                    followUp: 'Review after 5 days if symptoms persist',
+                    followUpDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                  }}
+                  onClose={() => setShowPreview(false)}
+                  onPrint={() => window.print()}
+                  readOnly={true}
+                  logo={prescriptionLogo}
+                  clinicSettings={clinicSettings}
+                  showSignatureSettings={true}
+                  onSignatureSettingsChange={(updatedDoctor) => setDocForm(updatedDoctor)}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
           <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-xl border border-slate-200 h-fit">
             <h3 className="font-bold text-lg mb-6 text-slate-800 flex items-center gap-2 border-b pb-2"><Briefcase size={20} className="text-blue-600"/> {editingDocId ? 'Edit Doctor' : 'Register Doctor'}</h3>
@@ -239,8 +309,100 @@ const AdminView = ({ appLogo, setAppLogo, prescriptionLogo, setPrescriptionLogo,
                  <span className="absolute right-3 top-3 text-gray-400 text-xs">Visible</span>
              </div>
              <AvailabilityEditor availability={docForm.availability} onChange={(newAvail) => setDocForm({...docForm, availability: newAvail})} />
-              <div className="border border-dashed border-slate-300 p-4 rounded-lg bg-slate-50"><label className="block text-xs font-bold mb-2 text-slate-500 uppercase">Upload Signature</label><input type="file" accept="image/*" onChange={(e) => {const file=e.target.files[0]; if(file) convertFileToBase64(file).then(b=>setDocForm({...docForm, signatureUrl:b}))}} className="text-sm w-full" /></div>
-              <div className="flex gap-2 pt-2"><button type="submit" className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-bold shadow-lg">{editingDocId ? 'Update' : 'Register'}</button>{editingDocId && <button type="button" onClick={() => {setEditingDocId(null); setDocForm({ name: '', spec: '', designation: '', email: '', password: '', qualification: '', registration: '', signatureUrl: '', availability: {} })}} className="flex-1 bg-slate-500 text-white py-3 rounded-lg hover:bg-slate-600 font-bold">Cancel</button>}</div>
+             
+             {/* Signature Upload */}
+             <div className="border border-dashed border-slate-300 p-4 rounded-lg bg-slate-50">
+               <label className="block text-xs font-bold mb-2 text-slate-500 uppercase">Upload Signature</label>
+               <input type="file" accept="image/*" onChange={(e) => {const file=e.target.files[0]; if(file) convertFileToBase64(file).then(b=>setDocForm({...docForm, signatureUrl:b}))}} className="text-sm w-full mb-3" />
+               {docForm.signatureUrl && (
+                 <div className="mt-3 p-2 bg-white rounded border border-slate-200">
+                   <img src={docForm.signatureUrl} alt="Signature Preview" className="max-h-16 mx-auto object-contain" />
+                 </div>
+               )}
+             </div>
+
+             {/* Signature Customization */}
+             {docForm.signatureUrl && (
+               <div className="border border-blue-200 p-4 rounded-lg bg-blue-50/30 space-y-4">
+                 <label className="block text-xs font-bold text-slate-700 uppercase">Signature Settings</label>
+                 
+                 <div>
+                   <label className="block text-xs font-semibold text-slate-600 mb-1">Size (px): {docForm.signatureSize}</label>
+                   <input 
+                     type="range" 
+                     min="20" 
+                     max="80" 
+                     value={docForm.signatureSize} 
+                     onChange={e => setDocForm({...docForm, signatureSize: parseInt(e.target.value)})}
+                     className="w-full"
+                   />
+                 </div>
+
+                 <div>
+                   <label className="block text-xs font-semibold text-slate-600 mb-1">
+                     Horizontal Position: {docForm.signaturePosition}%
+                     <span className="ml-2 text-xs text-slate-400">
+                       ({docForm.signaturePosition < 33 ? 'Left' : docForm.signaturePosition < 67 ? 'Center' : 'Right'})
+                     </span>
+                   </label>
+                   <div className="relative">
+                     <input 
+                       type="range" 
+                       min="0" 
+                       max="100" 
+                       value={docForm.signaturePosition} 
+                       onChange={e => setDocForm({...docForm, signaturePosition: parseInt(e.target.value)})}
+                       className="w-full"
+                     />
+                     <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                       <span>Left</span>
+                       <span>Center</span>
+                       <span>Right</span>
+                     </div>
+                   </div>
+                 </div>
+
+                 <div>
+                   <label className="block text-xs font-semibold text-slate-600 mb-1">Color:</label>
+                   <div className="flex gap-2 items-center">
+                     <input 
+                       type="color" 
+                       value={docForm.signatureColor} 
+                       onChange={e => setDocForm({...docForm, signatureColor: e.target.value})}
+                       className="w-12 h-8 border rounded cursor-pointer"
+                     />
+                     <input 
+                       type="text" 
+                       value={docForm.signatureColor} 
+                       onChange={e => setDocForm({...docForm, signatureColor: e.target.value})}
+                       className="flex-1 border p-2 rounded-lg text-sm bg-white font-mono"
+                       placeholder="#000000"
+                     />
+                   </div>
+                 </div>
+
+                 <button 
+                   type="button"
+                   onClick={() => setShowPreview(true)}
+                   className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 font-bold text-sm flex items-center justify-center gap-2"
+                 >
+                   <Eye size={16}/> Open Preview
+                 </button>
+               </div>
+             )}
+
+              <div className="flex gap-2 pt-2">
+                <button type="submit" className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-bold shadow-lg">{editingDocId ? 'Update' : 'Register'}</button>
+                {editingDocId && <button type="button" onClick={() => {
+                  setEditingDocId(null); 
+                  setDocForm({ 
+                    name: '', spec: '', designation: '', email: '', password: '', 
+                    qualification: '', registration: '', signatureUrl: '', availability: {},
+                    signatureSize: 30, signaturePosition: 85, signatureColor: '#000000'
+                  });
+                  setShowPreview(false);
+                }} className="flex-1 bg-slate-500 text-white py-3 rounded-lg hover:bg-slate-600 font-bold">Cancel</button>}
+              </div>
            </form>
           </div>
           <div className="lg:col-span-2 space-y-4">
@@ -252,6 +414,7 @@ const AdminView = ({ appLogo, setAppLogo, prescriptionLogo, setPrescriptionLogo,
              ))}
           </div>
         </div>
+        </>
       )}
 
       {/* RECEPTIONIST TAB */}
