@@ -136,9 +136,14 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
         const uploadPromises = [];
         const MAX_FIRESTORE_SIZE = 700 * 1024; // 700KB - safe limit for Firestore
         
-        // Process all files
+        // Process all files - use Firestore for all files to avoid CORS issues
         for (const file of files) {
-            // Check individual file size (50MB limit)
+            // Check individual file size
+            if (file.size > MAX_FIRESTORE_SIZE) {
+               alert(`File ${file.name} is too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum size is ${(MAX_FIRESTORE_SIZE / 1024 / 1024).toFixed(2)}MB. Please compress or split the file.`);
+               continue;
+            }
+            
             if (file.size > 50 * 1024 * 1024) {
                alert(`File ${file.name} is too large (>50MB). Please upload smaller files.`);
                continue;
@@ -158,154 +163,56 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
                 }
             }));
             
-            // Determine upload method: Storage for large files, Firestore for small files
-            const useStorage = file.size > MAX_FIRESTORE_SIZE && storage;
+            // Use Firestore for all files (avoids CORS issues)
+            console.log('Using Firestore for:', file.name, 'Size:', (file.size / 1024).toFixed(2), 'KB');
+            const uploadPromise = (async () => {
+                try {
+                    // Simulate progress for better UX
+                    setUploadProgress(prev => ({
+                        ...prev,
+                        [fileId]: { fileName: file.name, progress: 20, status: 'uploading' }
+                    }));
+                    
+                    // Convert to base64
+                    const base64 = await convertFileToBase64(file);
+                    
+                    setUploadProgress(prev => ({
+                        ...prev,
+                        [fileId]: { fileName: file.name, progress: 80, status: 'uploading' }
+                    }));
+                    
+                    // Small delay to show progress
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    setUploadProgress(prev => ({
+                        ...prev,
+                        [fileId]: { fileName: file.name, progress: 100, status: 'completed' }
+                    }));
+                    
+                    return {
+                        name: file.name,
+                        data: base64,
+                        type: file.type,
+                        size: file.size,
+                        uploadedAt: timestamp,
+                        storageType: 'firestore'
+                    };
+                } catch (err) {
+                    console.error("Error uploading file to Firestore:", file.name, err);
+                    setUploadProgress(prev => ({
+                        ...prev,
+                        [fileId]: {
+                            fileName: file.name,
+                            progress: 0,
+                            status: 'error',
+                            error: err.message || 'Upload failed'
+                        }
+                    }));
+                    throw err;
+                }
+            })();
             
-            if (useStorage) {
-                // Try Firebase Storage (for files > 700KB)
-                console.log('Using Firebase Storage for:', file.name);
-                const safeFileName = file.name.replace(/[^a-z0-9.-]/gi, '_');
-                const filePath = `reports/${appId}/${timestamp}_${randomId}_${safeFileName}`;
-                const storageRef = ref(storage, filePath);
-                
-                const uploadPromise = new Promise((resolve, reject) => {
-                    try {
-                        const uploadTask = uploadBytesResumable(storageRef, file);
-                        
-                        uploadTask.on('state_changed', 
-                            (snapshot) => {
-                                if (snapshot.totalBytes > 0) {
-                                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                                    setUploadProgress(prev => ({
-                                        ...prev,
-                                        [fileId]: {
-                                            fileName: file.name,
-                                            progress: Math.round(progress),
-                                            status: 'uploading'
-                                        }
-                                    }));
-                                } else {
-                                    setUploadProgress(prev => ({
-                                        ...prev,
-                                        [fileId]: { fileName: file.name, progress: 1, status: 'uploading' }
-                                    }));
-                                }
-                            },
-                            async (error) => {
-                                console.error("Storage upload failed, falling back to Firestore:", error);
-                                // Fallback to Firestore if Storage fails (CORS issue, etc.)
-                                if (file.size <= MAX_FIRESTORE_SIZE) {
-                                    try {
-                                        setUploadProgress(prev => ({
-                                            ...prev,
-                                            [fileId]: { fileName: file.name, progress: 50, status: 'uploading' }
-                                        }));
-                                        const base64 = await convertFileToBase64(file);
-                                        setUploadProgress(prev => ({
-                                            ...prev,
-                                            [fileId]: { fileName: file.name, progress: 100, status: 'completed' }
-                                        }));
-                                        resolve({
-                                            name: file.name,
-                                            data: base64, // Store as base64 in Firestore
-                                            type: file.type,
-                                            size: file.size,
-                                            uploadedAt: timestamp,
-                                            storageType: 'firestore' // Mark as Firestore storage
-                                        });
-                                    } catch (fallbackError) {
-                                        setUploadProgress(prev => ({
-                                            ...prev,
-                                            [fileId]: {
-                                                fileName: file.name,
-                                                progress: 0,
-                                                status: 'error',
-                                                error: 'Upload failed: ' + fallbackError.message
-                                            }
-                                        }));
-                                        reject(fallbackError);
-                                    }
-                                } else {
-                                    setUploadProgress(prev => ({
-                                        ...prev,
-                                        [fileId]: {
-                                            fileName: file.name,
-                                            progress: 0,
-                                            status: 'error',
-                                            error: 'File too large for fallback. Configure CORS for Storage or reduce file size.'
-                                        }
-                                    }));
-                                    reject(error);
-                                }
-                            },
-                            async () => {
-                                try {
-                                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                                    setUploadProgress(prev => ({
-                                        ...prev,
-                                        [fileId]: { fileName: file.name, progress: 100, status: 'completed' }
-                                    }));
-                                    resolve({
-                                        name: file.name,
-                                        url: downloadURL,
-                                        path: filePath,
-                                        type: file.type,
-                                        size: file.size,
-                                        uploadedAt: timestamp,
-                                        storageType: 'storage'
-                                    });
-                                } catch (err) {
-                                    reject(err);
-                                }
-                            }
-                        );
-                    } catch (err) {
-                        reject(err);
-                    }
-                });
-                
-                uploadPromises.push({ promise: uploadPromise, fileId, fileName: file.name });
-            } else {
-                // Use Firestore for smaller files (no CORS needed)
-                console.log('Using Firestore for:', file.name);
-                const uploadPromise = (async () => {
-                    try {
-                        setUploadProgress(prev => ({
-                            ...prev,
-                            [fileId]: { fileName: file.name, progress: 30, status: 'uploading' }
-                        }));
-                        
-                        const base64 = await convertFileToBase64(file);
-                        
-                        setUploadProgress(prev => ({
-                            ...prev,
-                            [fileId]: { fileName: file.name, progress: 100, status: 'completed' }
-                        }));
-                        
-                        return {
-                            name: file.name,
-                            data: base64,
-                            type: file.type,
-                            size: file.size,
-                            uploadedAt: timestamp,
-                            storageType: 'firestore'
-                        };
-                    } catch (err) {
-                        setUploadProgress(prev => ({
-                            ...prev,
-                            [fileId]: {
-                                fileName: file.name,
-                                progress: 0,
-                                status: 'error',
-                                error: err.message
-                            }
-                        }));
-                        throw err;
-                    }
-                })();
-                
-                uploadPromises.push({ promise: uploadPromise, fileId, fileName: file.name });
-            }
+            uploadPromises.push({ promise: uploadPromise, fileId, fileName: file.name });
         }
         
         if (uploadPromises.length === 0) {
@@ -716,7 +623,7 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
                                  </span>
                         ))}
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-2 italic">* Max size 50MB per file. Files are stored securely in Firebase Storage. Images/PDFs recommended.</p>
+                    <p className="text-[10px] text-slate-400 mt-2 italic">* Max size 700KB per file. Files are stored securely in Firestore. Images/PDFs recommended.</p>
                 </div>
             </div>
 
