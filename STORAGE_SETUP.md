@@ -1,65 +1,143 @@
-# Firebase Storage CORS Configuration Guide
+# Firebase Storage Setup Guide - Increase File Size Limit to 50MB
 
-## Problem
-You're getting CORS errors when uploading files from localhost. This is because Firebase Storage needs CORS configuration on the bucket itself.
+## Current Status
+- **Small files (≤700KB)**: Stored in Firestore (works immediately, no setup needed)
+- **Large files (>700KB up to 50MB)**: Requires Firebase Storage with CORS configuration
+
+## Why CORS Configuration is Needed
+
+Firebase Storage requires CORS (Cross-Origin Resource Sharing) configuration to allow uploads from:
+- Your production domain: `https://clinic-hub-nine.vercel.app`
+- Local development: `http://localhost:*`
+
+Without CORS, you'll get errors like:
+```
+Access to XMLHttpRequest at 'https://firebasestorage.googleapis.com/...' 
+from origin 'https://clinic-hub-nine.vercel.app' has been blocked by CORS policy
+```
 
 ## Solution: Configure CORS on Firebase Storage Bucket
 
-### Option 1: Using gsutil (Recommended)
+### Step 1: Install Google Cloud SDK (if not already installed)
 
-1. **Install Google Cloud SDK** (if not already installed):
-   - Download from: https://cloud.google.com/sdk/docs/install
-   - Or use: `choco install gcloudsdk` (Windows) / `brew install google-cloud-sdk` (Mac)
+**Windows:**
+- Download from: https://cloud.google.com/sdk/docs/install
+- Or use Chocolatey: `choco install gcloudsdk`
 
-2. **Authenticate**:
-   ```bash
-   gcloud auth login
-   ```
+**Mac:**
+```bash
+brew install google-cloud-sdk
+```
 
-3. **Set your project**:
-   ```bash
-   gcloud config set project patnam-clinic-hub
-   ```
+**Linux:**
+```bash
+curl https://sdk.cloud.google.com | bash
+exec -l $SHELL
+```
 
-4. **Apply CORS configuration**:
-   ```bash
-   gsutil cors set cors-config.json gs://patnam-clinic-hub.firebasestorage.app
-   ```
+### Step 2: Authenticate with Google Cloud
 
-5. **Verify it worked**:
-   ```bash
-   gsutil cors get gs://patnam-clinic-hub.firebasestorage.app
-   ```
+```bash
+gcloud auth login
+```
 
-### Option 2: Using Firebase Console (Easier but less control)
+This will open a browser window for you to sign in with your Google account (the same account used for Firebase).
 
-1. Go to Firebase Console → Storage
-2. Click on the "Rules" tab
-3. Make sure your rules allow uploads:
+### Step 3: Set Your Firebase Project
+
+```bash
+gcloud config set project patnam-clinic-hub
+```
+
+### Step 4: Apply CORS Configuration
+
+The `cors-config.json` file is already updated with your Vercel domain. Apply it:
+
+```bash
+gsutil cors set cors-config.json gs://patnam-clinic-hub.firebasestorage.app
+```
+
+### Step 5: Verify CORS Configuration
+
+```bash
+gsutil cors get gs://patnam-clinic-hub.firebasestorage.app
+```
+
+You should see output like:
+```json
+[
+  {
+    "origin": [
+      "http://localhost:*",
+      "http://127.0.0.1:*",
+      "https://clinic-hub-nine.vercel.app",
+      "https://*.vercel.app"
+    ],
+    "method": ["GET", "PUT", "POST", "DELETE", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Authorization", "Content-Length", "x-goog-resumable"],
+    "maxAgeSeconds": 3600
+  }
+]
+```
+
+### Step 6: Verify Storage Rules
+
+1. Go to: https://console.firebase.google.com/project/patnam-clinic-hub/storage/rules
+2. Make sure your rules allow uploads. For testing, use:
    ```
    rules_version = '2';
    service firebase.storage {
      match /b/{bucket}/o {
        match /{allPaths=**} {
-         allow read, write: if true; // For testing - restrict in production
+         allow read, write: if true;
        }
      }
    }
    ```
+3. Click "Publish"
 
-### Option 3: Using Firebase CLI
+**⚠️ Important:** For production, restrict these rules to authenticated users only.
 
-1. Install Firebase CLI: `npm install -g firebase-tools`
-2. Login: `firebase login`
-3. Use Firebase Storage emulator for local testing (alternative approach)
+### Step 7: Test Upload
 
-## Important Notes
+1. Deploy your changes to Vercel (or restart local dev server)
+2. Try uploading a file larger than 700KB (e.g., a 2MB PDF)
+3. The upload should work without CORS errors
 
-- The CORS configuration file (`cors-config.json`) is already created in your project root
-- After configuring CORS, restart your dev server
-- For production, replace `localhost:*` with your actual domain
-- Storage rules and CORS are different - you need both configured correctly
+## How It Works
 
-## Quick Test
+The code automatically:
+- **Files ≤700KB**: Uploads directly to Firestore (base64) - no CORS needed
+- **Files >700KB**: Attempts Firebase Storage upload
+  - If Storage works: File stored in Storage, URL saved in Firestore
+  - If Storage fails (CORS error): Falls back to Firestore if file ≤700KB, otherwise shows error
 
-After configuring CORS, try uploading a file again. The CORS error should be gone.
+## Troubleshooting
+
+### Error: "gsutil: command not found"
+- Make sure Google Cloud SDK is installed and in your PATH
+- Restart your terminal after installation
+
+### Error: "Access Denied"
+- Make sure you're logged in with the correct Google account
+- Verify you have Firebase Admin/Storage Admin permissions
+
+### Still Getting CORS Errors After Configuration
+1. Wait 1-2 minutes for CORS changes to propagate
+2. Clear browser cache
+3. Verify CORS config: `gsutil cors get gs://patnam-clinic-hub.firebasestorage.app`
+4. Check that your domain matches exactly (including `https://`)
+
+### Alternative: Use Firebase Console (Limited)
+Unfortunately, Firebase Console doesn't support CORS configuration directly. You must use `gsutil` or Google Cloud Console.
+
+## Need Help?
+
+If you can't configure CORS yourself:
+1. Ask someone with Firebase admin access to run the `gsutil` commands
+2. Or use the current setup (700KB limit) which works without CORS
+
+## Current Limits
+
+- **Without CORS configured**: 700KB per file (Firestore only)
+- **With CORS configured**: 50MB per file (Firebase Storage)

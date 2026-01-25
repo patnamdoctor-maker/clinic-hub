@@ -1,8 +1,13 @@
 [
   {
-    "origin": ["http://localhost:*", "http://127.0.0.1:*"],
-    "method": ["GET", "PUT", "POST", "DELETE", "HEAD"],
-    "responseHeader": ["Content-Type", "Authorization"],
+    "origin": [
+      "http://localhost:*",
+      "http://127.0.0.1:*",
+      "https://clinic-hub-nine.vercel.app",
+      "https://*.vercel.app"
+    ],
+    "method": ["GET", "PUT", "POST", "DELETE", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Authorization", "Content-Length", "x-goog-resumable"],
     "maxAgeSeconds": 3600
   }
 ]
