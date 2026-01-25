@@ -7,11 +7,26 @@ const PatientProfile = ({ patient, history = [], onClose, onViewPrescription }) 
     
     // Aggregate reports from all consultations
     const allReports = history.reduce((acc, consult) => {
-        if(consult.reports && Array.isArray(consult.reports)) {
-            return [...acc, ...consult.reports.map(r => ({...r, date: consult.createdAt}))];
+        if(consult.reports && Array.isArray(consult.reports) && consult.reports.length > 0) {
+            const consultReports = consult.reports.map(r => ({
+                ...r, 
+                date: consult.createdAt,
+                // Ensure we have either url (Storage) or data (base64) for display
+                displayUrl: r.url || r.data
+            }));
+            console.log(`Consultation ${consult.id} has ${consultReports.length} reports:`, consultReports);
+            return [...acc, ...consultReports];
         }
         return acc;
     }, []);
+    
+    // Debug: Log all aggregated reports
+    console.log('Total reports found:', allReports.length);
+    if (allReports.length > 0) {
+        console.log('All Reports:', allReports);
+    } else {
+        console.log('No reports found. History:', history.map(h => ({ id: h.id, reportsCount: h.reports?.length || 0 })));
+    }
 
     return (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4 overflow-y-auto">
@@ -185,23 +200,29 @@ const PatientProfile = ({ patient, history = [], onClose, onViewPrescription }) 
                                                     <p className="text-xs text-slate-500">{formatDate(report.date?.seconds)}</p>
                                                 </div>
                                                 <div className="flex items-center gap-1">
-                                                    <a 
-                                                        href={report.data} 
-                                                        target="_blank" 
-                                                        rel="noopener noreferrer"
-                                                        className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition"
-                                                        title="Open in new tab"
-                                                    >
-                                                        <ExternalLink size={18}/>
-                                                    </a>
-                                                    <a 
-                                                        href={report.data} 
-                                                        download={report.name} 
-                                                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                                                        title="Download"
-                                                    >
-                                                        <Download size={18}/>
-                                                    </a>
+                                                    {report.displayUrl || report.url || report.data ? (
+                                                        <>
+                                                            <a 
+                                                                href={report.displayUrl || report.url || report.data} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition"
+                                                                title="Open in new tab"
+                                                            >
+                                                                <ExternalLink size={18}/>
+                                                            </a>
+                                                            <a 
+                                                                href={report.displayUrl || report.url || report.data} 
+                                                                download={report.name} 
+                                                                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                                                title="Download"
+                                                            >
+                                                                <Download size={18}/>
+                                                            </a>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-xs text-red-500">No file URL</span>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))}

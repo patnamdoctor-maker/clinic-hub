@@ -5,7 +5,8 @@ import {
   Trash2, Search, Clock, CreditCard, History, Mail, Receipt, FilePlus
 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, updateDoc, doc, setDoc, query, serverTimestamp } from 'firebase/firestore';
-import { db, appId } from '../firebase/config';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { db, storage, appId } from '../firebase/config';
 import { convertFileToBase64, formatTime, formatDate, generateUHID } from '../utils';
 import PrescriptionPreview from '../components/PrescriptionPreview';
 import PatientProfile from '../components/PatientProfile';
@@ -14,6 +15,7 @@ import BillingModal from '../components/BillingModal';
 const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSettings }) => {
   const [activeTab, setActiveTab] = useState('dashboard'); 
   const [loading, setLoading] = useState(false);
+  const [uploadingReports, setUploadingReports] = useState(false);
   const [consultations, setConsultations] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [patients, setPatients] = useState([]);
@@ -44,6 +46,7 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
   
   // File Upload State
   const [reportFiles, setReportFiles] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState({}); // Track progress for each file
 
   const [formData, setFormData] = useState({ name: '', age: '', sex: 'Male', phone: '', email: '', aadhaar: '', chronicConditions: '', bp: '', pulse: '', grbs: '', weight: '', doctorId: '', meetingLink: '', paymentMode: 'Cash', paymentAmount: '500' });
 
@@ -51,6 +54,15 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
     const unsubDocs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'doctors'), (snap) => setDoctors(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubCons = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'consultations')), (snap) => { const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })); data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); setConsultations(data); });
     const unsubPatients = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'patients'), (snap) => setPatients(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+    
+    // Verify Storage is initialized
+    if (!storage) {
+      console.error('Firebase Storage is not initialized!');
+      alert('Warning: Firebase Storage is not configured. File uploads will not work.');
+    } else {
+      console.log('Firebase Storage initialized:', storage.app.options.storageBucket);
+    }
+    
     return () => { unsubDocs(); unsubCons(); unsubPatients(); };
   }, []);
 
@@ -118,20 +130,224 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
   
   const handleReportUpload = async (e) => {
         const files = Array.from(e.target.files);
-        const newReports = [];
+        if (files.length === 0) return;
+        
+        setUploadingReports(true);
+        const uploadPromises = [];
+        const MAX_FIRESTORE_SIZE = 700 * 1024; // 700KB - safe limit for Firestore
+        
+        // Process all files
         for (const file of files) {
+            // Check individual file size (50MB limit)
             if (file.size > 50 * 1024 * 1024) {
                alert(`File ${file.name} is too large (>50MB). Please upload smaller files.`);
                continue;
             }
-            try {
-                const base64 = await convertFileToBase64(file);
-                newReports.push({ name: file.name, data: base64, type: file.type });
-            } catch (err) {
-               console.error("Error reading file", file.name, err);
+            
+            const timestamp = Date.now();
+            const randomId = Math.random().toString(36).substring(2, 9);
+            const fileId = `${timestamp}_${randomId}`;
+            
+            // Initialize progress
+            setUploadProgress(prev => ({
+                ...prev,
+                [fileId]: {
+                    fileName: file.name,
+                    progress: 0,
+                    status: 'uploading'
+                }
+            }));
+            
+            // Determine upload method: Storage for large files, Firestore for small files
+            const useStorage = file.size > MAX_FIRESTORE_SIZE && storage;
+            
+            if (useStorage) {
+                // Try Firebase Storage (for files > 700KB)
+                console.log('Using Firebase Storage for:', file.name);
+                const safeFileName = file.name.replace(/[^a-z0-9.-]/gi, '_');
+                const filePath = `reports/${appId}/${timestamp}_${randomId}_${safeFileName}`;
+                const storageRef = ref(storage, filePath);
+                
+                const uploadPromise = new Promise((resolve, reject) => {
+                    try {
+                        const uploadTask = uploadBytesResumable(storageRef, file);
+                        
+                        uploadTask.on('state_changed', 
+                            (snapshot) => {
+                                if (snapshot.totalBytes > 0) {
+                                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                                    setUploadProgress(prev => ({
+                                        ...prev,
+                                        [fileId]: {
+                                            fileName: file.name,
+                                            progress: Math.round(progress),
+                                            status: 'uploading'
+                                        }
+                                    }));
+                                } else {
+                                    setUploadProgress(prev => ({
+                                        ...prev,
+                                        [fileId]: { fileName: file.name, progress: 1, status: 'uploading' }
+                                    }));
+                                }
+                            },
+                            async (error) => {
+                                console.error("Storage upload failed, falling back to Firestore:", error);
+                                // Fallback to Firestore if Storage fails (CORS issue, etc.)
+                                if (file.size <= MAX_FIRESTORE_SIZE) {
+                                    try {
+                                        setUploadProgress(prev => ({
+                                            ...prev,
+                                            [fileId]: { fileName: file.name, progress: 50, status: 'uploading' }
+                                        }));
+                                        const base64 = await convertFileToBase64(file);
+                                        setUploadProgress(prev => ({
+                                            ...prev,
+                                            [fileId]: { fileName: file.name, progress: 100, status: 'completed' }
+                                        }));
+                                        resolve({
+                                            name: file.name,
+                                            data: base64, // Store as base64 in Firestore
+                                            type: file.type,
+                                            size: file.size,
+                                            uploadedAt: timestamp,
+                                            storageType: 'firestore' // Mark as Firestore storage
+                                        });
+                                    } catch (fallbackError) {
+                                        setUploadProgress(prev => ({
+                                            ...prev,
+                                            [fileId]: {
+                                                fileName: file.name,
+                                                progress: 0,
+                                                status: 'error',
+                                                error: 'Upload failed: ' + fallbackError.message
+                                            }
+                                        }));
+                                        reject(fallbackError);
+                                    }
+                                } else {
+                                    setUploadProgress(prev => ({
+                                        ...prev,
+                                        [fileId]: {
+                                            fileName: file.name,
+                                            progress: 0,
+                                            status: 'error',
+                                            error: 'File too large for fallback. Configure CORS for Storage or reduce file size.'
+                                        }
+                                    }));
+                                    reject(error);
+                                }
+                            },
+                            async () => {
+                                try {
+                                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                                    setUploadProgress(prev => ({
+                                        ...prev,
+                                        [fileId]: { fileName: file.name, progress: 100, status: 'completed' }
+                                    }));
+                                    resolve({
+                                        name: file.name,
+                                        url: downloadURL,
+                                        path: filePath,
+                                        type: file.type,
+                                        size: file.size,
+                                        uploadedAt: timestamp,
+                                        storageType: 'storage'
+                                    });
+                                } catch (err) {
+                                    reject(err);
+                                }
+                            }
+                        );
+                    } catch (err) {
+                        reject(err);
+                    }
+                });
+                
+                uploadPromises.push({ promise: uploadPromise, fileId, fileName: file.name });
+            } else {
+                // Use Firestore for smaller files (no CORS needed)
+                console.log('Using Firestore for:', file.name);
+                const uploadPromise = (async () => {
+                    try {
+                        setUploadProgress(prev => ({
+                            ...prev,
+                            [fileId]: { fileName: file.name, progress: 30, status: 'uploading' }
+                        }));
+                        
+                        const base64 = await convertFileToBase64(file);
+                        
+                        setUploadProgress(prev => ({
+                            ...prev,
+                            [fileId]: { fileName: file.name, progress: 100, status: 'completed' }
+                        }));
+                        
+                        return {
+                            name: file.name,
+                            data: base64,
+                            type: file.type,
+                            size: file.size,
+                            uploadedAt: timestamp,
+                            storageType: 'firestore'
+                        };
+                    } catch (err) {
+                        setUploadProgress(prev => ({
+                            ...prev,
+                            [fileId]: {
+                                fileName: file.name,
+                                progress: 0,
+                                status: 'error',
+                                error: err.message
+                            }
+                        }));
+                        throw err;
+                    }
+                })();
+                
+                uploadPromises.push({ promise: uploadPromise, fileId, fileName: file.name });
             }
         }
-        setReportFiles([...reportFiles, ...newReports]);
+        
+        if (uploadPromises.length === 0) {
+            setUploadingReports(false);
+            e.target.value = '';
+            return;
+        }
+        
+        try {
+            const results = await Promise.allSettled(uploadPromises.map(({ promise }) => promise));
+            const successfulReports = [];
+            const errors = [];
+            
+            results.forEach((result, index) => {
+                const { fileName } = uploadPromises[index];
+                if (result.status === 'fulfilled') {
+                    successfulReports.push(result.value);
+                } else {
+                    errors.push({ fileName, error: result.reason?.message || 'Upload failed' });
+                }
+            });
+            
+            if (successfulReports.length > 0) {
+                setReportFiles([...reportFiles, ...successfulReports]);
+            }
+            
+            if (errors.length > 0) {
+                alert(`Upload completed:\n\n` +
+                      `✅ Successfully uploaded: ${successfulReports.length} file(s)\n` +
+                      `❌ Failed: ${errors.length} file(s)\n\n` +
+                      `Failed: ${errors.map(e => e.fileName).join(', ')}`);
+            } else if (successfulReports.length > 0) {
+                alert(`Successfully uploaded ${successfulReports.length} file(s).`);
+                setTimeout(() => setUploadProgress({}), 2000);
+            }
+        } catch (err) {
+            console.error("Upload error:", err);
+            alert(`Error during upload: ${err.message}`);
+        } finally {
+            setUploadingReports(false);
+            e.target.value = '';
+        }
   };
 
   const removeReport = (index) => {
@@ -142,6 +358,9 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
     e.preventDefault();
     if (!formData.doctorId) return alert("Please select a doctor");
     if (!formData.meetingLink) return alert("Missing Video Link. Please select a doctor with a configured link or create one manually.");
+
+    // No need to validate total size anymore since files are in Storage, not Firestore
+    // Just check if we have reports
 
     setLoading(true);
     try {
@@ -158,6 +377,36 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
       const existingPatient = patients.find(p => p.id === safePatientId || (p.name === formData.name && p.phone === formData.phone));
       const uhidToUse = existingPatient?.uhid || newUHID;
 
+      // Store reports metadata
+      // Files can be in Storage (url) or Firestore (data as base64)
+      const reportsMetadata = reportFiles.map(report => {
+        if (report.storageType === 'firestore' || report.data) {
+          // Firestore storage - store base64 data
+          return {
+            name: report.name,
+            data: report.data,
+            type: report.type,
+            size: report.size,
+            uploadedAt: report.uploadedAt,
+            storageType: 'firestore'
+          };
+        } else {
+          // Storage - store URL and metadata
+          return {
+            name: report.name,
+            url: report.url,
+            path: report.path,
+            type: report.type,
+            size: report.size,
+            uploadedAt: report.uploadedAt,
+            storageType: 'storage'
+          };
+        }
+      });
+      
+      console.log('Saving reports metadata:', reportsMetadata);
+      console.log('Total report files:', reportFiles.length);
+
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'consultations'), {
         ...formData, 
         uhid: uhidToUse,
@@ -171,7 +420,7 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
         meetingLink: formData.meetingLink, 
         createdAt: serverTimestamp(), 
         clinicalData: null,
-        reports: reportFiles
+        reports: reportsMetadata
       });
 
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'patients', safePatientId), { 
@@ -197,7 +446,7 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
       setActiveTab('dashboard');
     } catch (err) { 
         console.error("Registration Error:", err); 
-        alert(`Error registering patient: ${err.message}`); 
+        alert(`Error registering patient: ${err.message}`);
     } finally { 
         setLoading(false); 
     }
@@ -424,7 +673,42 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
                 
                 <div className="bg-amber-50/50 p-6 rounded-2xl border border-amber-100">
                     <h3 className="text-sm font-bold text-amber-700 uppercase mb-4 flex items-center gap-2"><FilePlus size={18}/> Upload Reports (Optional)</h3>
-                    <input type="file" multiple onChange={handleReportUpload} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-100 file:text-amber-700 hover:file:bg-amber-200"/>
+                    <input 
+                      type="file" 
+                      multiple 
+                      onChange={handleReportUpload} 
+                      disabled={uploadingReports}
+                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-100 file:text-amber-700 hover:file:bg-amber-200 disabled:opacity-50"
+                    />
+                    
+                    {/* Upload Progress Display */}
+                    {uploadingReports && Object.keys(uploadProgress).length > 0 && (
+                        <div className="mt-4 space-y-2">
+                            {Object.entries(uploadProgress).map(([fileId, progress]) => (
+                                <div key={fileId} className="bg-white p-3 rounded-lg border border-amber-200">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-xs font-semibold text-slate-700 truncate flex-1 mr-2">{progress.fileName}</span>
+                                        <span className="text-xs font-bold text-amber-600">{progress.progress}%</span>
+                                    </div>
+                                    <div className="w-full bg-amber-100 rounded-full h-2 overflow-hidden">
+                                        <div 
+                                            className={`h-full transition-all duration-300 ${
+                                                progress.status === 'completed' ? 'bg-green-500' : 
+                                                progress.status === 'error' ? 'bg-red-500' : 
+                                                'bg-amber-500'
+                                            }`}
+                                            style={{ width: `${progress.progress}%` }}
+                                        />
+                                    </div>
+                                    {progress.status === 'error' && (
+                                        <p className="text-xs text-red-600 mt-1">{progress.error}</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {/* Uploaded Files List */}
                     <div className="mt-3 flex flex-wrap gap-2">
                         {reportFiles.map((file, idx) => (
                                  <span key={idx} className="bg-white border border-amber-200 text-amber-800 text-xs px-2 py-1 rounded flex items-center gap-1">
@@ -432,7 +716,7 @@ const ReceptionistView = ({ user, currentUser, logo, prescriptionLogo, clinicSet
                                  </span>
                         ))}
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-2 italic">* Max size 50MB per file. Images/PDFs recommended.</p>
+                    <p className="text-[10px] text-slate-400 mt-2 italic">* Max size 50MB per file. Files are stored securely in Firebase Storage. Images/PDFs recommended.</p>
                 </div>
             </div>
 

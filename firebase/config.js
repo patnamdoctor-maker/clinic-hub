@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 /* --- FIREBASE CONFIGURATION --- */
 const firebaseConfig = typeof __firebase_config !== 'undefined' 
@@ -18,4 +19,5 @@ const firebaseConfig = typeof __firebase_config !== 'undefined'
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 export const appId = typeof __app_id !== 'undefined' ? __app_id : 'patnam-clinic-default';
