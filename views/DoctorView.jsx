@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Activity, Calendar, FileText, Video, Printer, CheckCircle, 
-  Settings, Clock, User, History, LayoutDashboard, Eye, Pencil, Pill
+  Settings, Clock, User, History, LayoutDashboard, Eye, Pencil, Pill,
+  Download, ExternalLink
 } from 'lucide-react';
 import { collection, onSnapshot, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db, appId } from '../firebase/config';
@@ -431,11 +432,35 @@ const DoctorView = ({ user, currentDoctor, logo, prescriptionLogo, clinicSetting
                {selectedPatient?.reports && selectedPatient.reports.length > 0 && (
                    <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
                        <h3 className="font-bold text-purple-800 flex items-center gap-2 mb-2"><FileText size={18}/> Patient Reports</h3>
-                       <div className="flex flex-wrap gap-2">
+                       <div className="space-y-2">
                            {selectedPatient.reports.map((report, idx) => (
-                                <a key={idx} href={report.data} download={report.name} className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-purple-200 text-sm font-bold text-purple-700 hover:bg-purple-100 transition shadow-sm">
-                                    <FileText size={14}/> {report.name}
-                                 </a>
+                               <div key={idx} className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-purple-200 text-sm font-bold text-purple-700 hover:bg-purple-100 transition shadow-sm">
+                                   <FileText size={14}/>
+                                   <span className="flex-1 truncate">{report.name}</span>
+                                   {(report.data || report.url) ? (
+                                       <>
+                                           <a
+                                               href={report.data || report.url}
+                                               target="_blank"
+                                               rel="noopener noreferrer"
+                                               className="p-1.5 text-purple-400 hover:text-green-600 hover:bg-green-50 rounded transition"
+                                               title="Open in new tab"
+                                           >
+                                               <ExternalLink size={14}/>
+                                           </a>
+                                           <a
+                                               href={report.data || report.url}
+                                               download={report.name}
+                                               className="p-1.5 text-purple-400 hover:text-blue-600 hover:bg-blue-50 rounded transition"
+                                               title="Download"
+                                           >
+                                               <Download size={14}/>
+                                           </a>
+                                       </>
+                                   ) : (
+                                       <span className="text-xs text-red-500">No file URL</span>
+                                   )}
+                               </div>
                            ))}
                        </div>
                    </div>
